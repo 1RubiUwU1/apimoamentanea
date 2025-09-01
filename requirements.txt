@@ -1,0 +1,4 @@
+Flask==2.3.4
+flask-cors==4.1.2
+pydub==0.25.1
+SpeechRecognition==3.10.0
