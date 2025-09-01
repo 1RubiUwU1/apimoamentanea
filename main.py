@@ -1,51 +1,58 @@
-# transcripter_api.py
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # 🔹 Importar CORS
-from pydub import AudioSegment
-import speech_recognition as sr
+from flask_cors import CORS
+import requests
 import os
-import tempfile
 
 app = Flask(__name__)
-CORS(app)  # 🔹 Habilitar CORS para todos los dominios
+CORS(app)  # habilita CORS para cualquier origen
 
-@app.route("/transcripter", methods=["POST"])
+# Ruta para comprobar que la API está viva
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"status": "ok", "message": "API funcionando"})
+
+
+# Ruta para transcripción
+@app.route("/transcribe", methods=["POST", "GET"])
 def transcribe():
-    if "file" not in request.files:
-        return jsonify({"error": "No se proporcionó archivo de audio"}), 400
-
-    audio_file = request.files["file"]
-
     try:
-        # Guardar temporalmente el archivo recibido
-        temp_ogg = tempfile.NamedTemporaryFile(delete=False, suffix=".ogg")
-        audio_file.save(temp_ogg.name)
+        audio_data = None
 
-        # Convertir OGG a WAV mono 16kHz
-        temp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-        audio = AudioSegment.from_file(temp_ogg.name)
-        audio = audio.set_channels(1).set_frame_rate(16000)
-        audio.export(temp_wav.name, format="wav")
+        # Si viene por POST como archivo
+        if request.method == "POST":
+            if "file" not in request.files:
+                return jsonify({"error": "No se envió archivo"}), 400
 
-        # Reconocimiento de voz
-        r = sr.Recognizer()
-        with sr.AudioFile(temp_wav.name) as source:
-            audio_data = r.record(source)
-        try:
-            text = r.recognize_google(audio_data, language="es-ES")
-        except sr.UnknownValueError:
-            text = "No se pudo transcribir el audio"
-        except sr.RequestError as e:
-            text = f"Error de servicio: {e}"
+            file = request.files["file"]
+            audio_data = file.read()
 
-        # Limpiar archivos temporales
-        os.unlink(temp_ogg.name)
-        os.unlink(temp_wav.name)
+        # Si viene por GET con URL del audio
+        elif request.method == "GET":
+            audio_url = request.args.get("url")
+            if not audio_url:
+                return jsonify({"error": "No se envió parámetro url"}), 400
 
-        return jsonify({"text": text})
+            # Descargamos el archivo desde la URL
+            resp = requests.get(audio_url)
+            if resp.status_code != 200:
+                return jsonify({"error": "No se pudo descargar el audio"}), 400
+
+            audio_data = resp.content
+
+        # Simulación de transcripción (aquí va tu modelo/servicio real)
+        # Por ejemplo, podrías conectar con OpenAI Whisper, SpeechRecognition, etc.
+        texto = "Transcripción simulada del audio recibido."
+
+        return jsonify({
+            "status": "ok",
+            "text": texto,
+            "size_bytes": len(audio_data)
+        })
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
